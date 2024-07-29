@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use log::{debug, info};
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Debug};
 use std::path::Path;
 use std::process::Stdio;
 use thiserror::Error;
@@ -350,7 +350,8 @@ pub async fn push_profile(data: PushProfileData<'_>) -> Result<(), PushProfileEr
             .arg(format!("ssh://{}@{}", data.deploy_defs.ssh_user, hostname))
             .arg(&data.deploy_data.profile.profile_settings.path)
             .env("NIX_SSHOPTS", ssh_opts_str);
-        info!("full nix copy command: {full_command:?}");
+        // overkill but it didn't work last time
+        info!(format!("full nix copy command: {:?}", full_command).as_str());
         let copy_exit_status = full_command
             .status()
             .await
