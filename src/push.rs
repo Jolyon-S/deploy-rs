@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use log::{debug, info};
-use std::collections::HashMap;
 use std::path::Path;
 use std::process::Stdio;
+use std::{collections::HashMap, fmt::Debug};
 use thiserror::Error;
 use tokio::process::Command;
 
@@ -59,7 +59,10 @@ pub struct PushProfileData<'a> {
     pub extra_build_args: &'a [String],
 }
 
-pub async fn build_profile_locally(data: &PushProfileData<'_>, derivation_name: &str) -> Result<(), PushProfileError> {
+pub async fn build_profile_locally(
+    data: &PushProfileData<'_>,
+    derivation_name: &str,
+) -> Result<(), PushProfileError> {
     info!(
         "Building profile `{}` for node `{}`",
         data.deploy_data.profile_name, data.deploy_data.node_name
@@ -152,7 +155,10 @@ pub async fn build_profile_locally(data: &PushProfileData<'_>, derivation_name: 
     Ok(())
 }
 
-pub async fn build_profile_remotely(data: &PushProfileData<'_>, derivation_name: &str) -> Result<(), PushProfileError> {
+pub async fn build_profile_remotely(
+    data: &PushProfileData<'_>,
+    derivation_name: &str,
+) -> Result<(), PushProfileError> {
     info!(
         "Building profile `{}` for node `{}` on remote host",
         data.deploy_data.profile_name, data.deploy_data.node_name
@@ -167,12 +173,14 @@ pub async fn build_profile_remotely(data: &PushProfileData<'_>, derivation_name:
 
     let ssh_opts_str = data.deploy_data.merged_settings.ssh_opts.join(" ");
 
-
     // copy the derivation to remote host so it can be built there
-    let copy_command_status = Command::new("nix").arg("copy")
-        .arg("-s")  // fetch dependencies from substitures, not localhost
-        .arg("--to").arg(&store_address)
-        .arg("--derivation").arg(derivation_name)
+    let copy_command_status = Command::new("nix")
+        .arg("copy")
+        .arg("-s") // fetch dependencies from substitures, not localhost
+        .arg("--to")
+        .arg(&store_address)
+        .arg("--derivation")
+        .arg(derivation_name)
         .env("NIX_SSHOPTS", ssh_opts_str.clone())
         .stdout(Stdio::null())
         .status()
@@ -186,9 +194,12 @@ pub async fn build_profile_remotely(data: &PushProfileData<'_>, derivation_name:
 
     let mut build_command = Command::new("nix");
     build_command
-        .arg("build").arg(derivation_name)
-        .arg("--eval-store").arg("auto")
-        .arg("--store").arg(&store_address)
+        .arg("build")
+        .arg(derivation_name)
+        .arg("--eval-store")
+        .arg("auto")
+        .arg("--store")
+        .arg(&store_address)
         .args(data.extra_build_args)
         .env("NIX_SSHOPTS", ssh_opts_str.clone());
 
@@ -205,7 +216,6 @@ pub async fn build_profile_remotely(data: &PushProfileData<'_>, derivation_name:
         Some(0) => (),
         a => return Err(PushProfileError::BuildExit(a)),
     };
-
 
     Ok(())
 }
@@ -253,13 +263,16 @@ pub async fn build_profile(data: PushProfileData<'_>) -> Result<(), PushProfileE
     };
 
     let path_info_output = Command::new("nix")
-        .arg("--experimental-features").arg("nix-command")
+        .arg("--experimental-features")
+        .arg("nix-command")
         .arg("path-info")
         .arg(&deriver)
-        .output().await
+        .output()
+        .await
         .map_err(PushProfileError::PathInfo)?;
 
-    let deriver = if std::str::from_utf8(&path_info_output.stdout).map(|s| s.trim()) == Ok(deriver) {
+    let deriver = if std::str::from_utf8(&path_info_output.stdout).map(|s| s.trim()) == Ok(deriver)
+    {
         // In this case we're on 2.15.0 or newer, because 'nix path-infonix path-info <...>.drv'
         // returns the same '<...>.drv' path.
         // If 'nix path-info <...>.drv' returns a different path, then we're on pre 2.15.0 nix and
@@ -274,9 +287,14 @@ pub async fn build_profile(data: PushProfileData<'_>) -> Result<(), PushProfileE
         // 'error: path '...' is not valid'.
         deriver
     };
-    if data.deploy_data.merged_settings.remote_build.unwrap_or(false) {
+    if data
+        .deploy_data
+        .merged_settings
+        .remote_build
+        .unwrap_or(false)
+    {
         if !data.supports_flakes {
-            return Err(PushProfileError::RemoteBuildWithLegacyNix)
+            return Err(PushProfileError::RemoteBuildWithLegacyNix);
         }
 
         build_profile_remotely(&data, &deriver).await?;
@@ -300,7 +318,12 @@ pub async fn push_profile(data: PushProfileData<'_>) -> Result<(), PushProfileEr
 
     // remote building guarantees that the resulting derivation is stored on the target system
     // no need to copy after building
-    if !data.deploy_data.merged_settings.remote_build.unwrap_or(false) {
+    if !data
+        .deploy_data
+        .merged_settings
+        .remote_build
+        .unwrap_or(false)
+    {
         info!(
             "Copying profile `{}` to node `{}`",
             data.deploy_data.profile_name, data.deploy_data.node_name
@@ -322,11 +345,14 @@ pub async fn push_profile(data: PushProfileData<'_>) -> Result<(), PushProfileEr
             None => &data.deploy_data.node.node_settings.hostname,
         };
 
-        let copy_exit_status = copy_command
+        let full_command = &mut copy_command
             .arg("--to")
             .arg(format!("ssh://{}@{}", data.deploy_defs.ssh_user, hostname))
             .arg(&data.deploy_data.profile.profile_settings.path)
-            .env("NIX_SSHOPTS", ssh_opts_str)
+            .env("NIX_SSHOPTS", ssh_opts_str);
+        // overkill but it didn't work last time
+        info!("{}", format!("full nix copy command: {:?}", full_command));
+        let copy_exit_status = full_command
             .status()
             .await
             .map_err(PushProfileError::Copy)?;
