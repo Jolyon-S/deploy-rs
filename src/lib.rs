@@ -400,11 +400,16 @@ impl<'a> DeployData<'a> {
 
     fn get_profile_info(&'a self) -> Result<ProfileInfo, DeployDataDefsError> {
         match self.profile.profile_settings.profile_path {
-            Some(ref profile_path) => Ok(ProfileInfo::ProfilePath { profile_path: profile_path.to_string() }),
+            Some(ref profile_path) => Ok(ProfileInfo::ProfilePath {
+                profile_path: profile_path.to_string(),
+            }),
             None => {
                 let profile_user = self.get_profile_user()?;
-                Ok(ProfileInfo::ProfileUserAndName { profile_user, profile_name: self.profile_name.to_string() })
-            },
+                Ok(ProfileInfo::ProfileUserAndName {
+                    profile_user,
+                    profile_name: self.profile_name.to_string(),
+                })
+            }
         }
     }
 }
